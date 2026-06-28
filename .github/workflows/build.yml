@@ -105,3 +105,29 @@ jobs:
 
           digest="$(jq -r '.["containerimage.descriptor"].digest' "${metadata}")"
           cosign sign --yes "${{ env.IMAGE }}@${digest}"
+
+  notify:
+    name: Notify ha-apps catalog
+    needs: [init, manifest]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    steps:
+      - name: Dispatch to ha-apps
+        env:
+          GH_TOKEN: ${{ secrets.CATALOG_PAT }}
+          VERSION: ${{ needs.init.outputs.version }}
+          RELEASE_NOTES: ${{ github.event.release.body }}
+        run: |
+          set -euo pipefail
+          SLUG="${GITHUB_REPOSITORY#saya6k/ha-app-}"
+          python3 -c "
+          import json, os, sys
+          print(json.dumps({
+            'event_type': 'app-released',
+            'client_payload': {
+              'app': os.environ['SLUG'],
+              'version': os.environ['VERSION'],
+              'release_notes': os.environ['RELEASE_NOTES'],
+            },
+          }))
+          " | gh api repos/saya6k/ha-apps/dispatches --input -
