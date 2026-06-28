@@ -44,24 +44,26 @@ rootfs/.../s6-rc.d/             voiceprint (longrun) + discovery (oneshot)
 translations/{en,ko}.yaml       option UI strings
 ```
 
-The 14 MB model is **not** in the image or the repo — it downloads once into
-`/data` (`models.MODEL_URL`, a pinned GitHub release asset) and is verified
-against `const.MODEL_SHA256`. A local dev copy under `models/` is gitignored.
-**Publishing the asset is a one-time manual step:** create a
-`voiceprint-model-v1` release and upload `campplus_zh_en_fp16.tflite`, or the
-first run can't fetch it.
+The 14 MB model file exists at `models/campplus_zh_en_fp16.tflite` in the repo
+(committed; originally intended to be gitignored but synced in during migration).
+The Dockerfile does **not** COPY it into the image — at runtime `wyoming_voiceprint/models.py`
+fetches it once into `/data` (from `const.MODEL_URL`, a pinned `voiceprint-model-v1`
+GitHub release asset) and verifies against `const.MODEL_SHA256`. The file in `models/`
+is a local reference copy; consider removing it and adding `models/` to `.gitignore`
+to keep the repo lightweight.
 
-## Git / repo tracking
+## Repo structure
 
-Stage-gated by the root `.gitignore`. **This add-on:** `stage: stable`
-→ committed. Its slug is registered in the repo-root release-please config,
-`.release-please-manifest.json`, `labels.yml`, `labeler.yml`, and the issue
-templates. The model is fetched at runtime (see above), so nothing large is in
-the tree.
+Standalone repo — source, CI, and releases live here.
+`ha-apps` references the published GHCR image via `image: ghcr.io/saya6k/app-voiceprint`.
+
+**Stage:** stable (no `stage:` key in `config.yaml`).
+
+Release flow: push to `main` → release-drafter drafts the next patch version → publish the draft → `build.yml` pushes multi-arch GHCR images → `repository_dispatch` to ha-apps auto-updates `config.yaml`.
 
 `icon.png` / `logo.png` are Google's Material Icons **fingerprint** glyph
 (Apache-2.0), recoloured to teal `#0EA5A4`; the logo adds a "Voiceprint"
-wordmark. Add an Apache-2.0 NOTICE/attribution for it when promoting to stable.
+wordmark. Add an Apache-2.0 NOTICE/attribution for it when publishing.
 
 ## The model (do not swap casually)
 
