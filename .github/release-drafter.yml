@@ -8,6 +8,16 @@ categories:
     labels: ["bug", "fix"]
   - title: "Maintenance"
     labels: ["chore", "dependencies", "ci"]
+autolabeler:
+  - label: enhancement
+    title:
+      - '/^feat(\(.+\))?!?:/i'
+  - label: fix
+    title:
+      - '/^(fix|perf|revert)(\(.+\))?!?:/i'
+  - label: chore
+    title:
+      - '/^(chore|ci|docs|refactor|build|style|test)(\(.+\))?!?:/i'
 template: |
   ## What's Changed
 
