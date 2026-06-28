@@ -1,0 +1,33 @@
+version: dev
+slug: voiceprint
+name: Voiceprint
+description: >-
+  Speaker-verifying Wyoming STT proxy — only enrolled voices reach your
+  speech-to-text
+url: https://github.com/saya6k/ha-app-voiceprint
+arch:
+  - amd64
+  - aarch64
+init: false
+discovery:
+  - wyoming
+map:
+  - share:rw
+options:
+  upstream_uri: tcp://03f32180-nemo-asr-cpp:10360
+  threshold: 0.5
+  require_match: true
+  tag_speaker: false
+  capture: false
+schema:
+  upstream_uri: str
+  threshold: float(0,1)
+  require_match: bool
+  tag_speaker: bool
+  capture: bool
+  debug_logging: bool?
+ports:
+  10350/tcp: null
+ports_description:
+  10350/tcp: Voiceprint Wyoming Protocol
+homeassistant: 2023.9.0.dev20230809

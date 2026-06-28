@@ -1,0 +1,107 @@
+---
+name: Build
+
+# yamllint disable-line rule:truthy
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (e.g. 4.1.20)
+        required: true
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/${{ github.repository_owner }}/app-voiceprint
+
+jobs:
+  init:
+    name: Initialize build
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Resolve version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            ver="${{ inputs.version }}"
+          else
+            ver="${{ github.event.release.tag_name }}"
+          fi
+          echo "version=${ver#v}" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: init
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            os: ubuntu-latest
+          - arch: aarch64
+            os: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build and push per-arch image
+        uses: home-assistant/builder/actions/build-image@2026.06.0
+        with:
+          arch: ${{ matrix.arch }}
+          image: ${{ env.IMAGE }}
+          context: voiceprint
+          image-tags: |
+            ${{ matrix.arch }}-${{ needs.init.outputs.version }}
+            ${{ matrix.arch }}-latest
+          cache-image-tag: ${{ matrix.arch }}-latest
+          version: ${{ needs.init.outputs.version }}
+          push: "true"
+          container-registry-password: ${{ secrets.GITHUB_TOKEN }}
+
+  manifest:
+    name: Publish multi-arch manifest
+    needs: [init, build]
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      packages: write
+    env:
+      VERSION: ${{ needs.init.outputs.version }}
+    steps:
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Create and sign multi-arch manifest
+        run: |
+          set -euo pipefail
+          metadata="$(mktemp)"
+          docker buildx imagetools create \
+            --metadata-file "${metadata}" \
+            --tag "${{ env.IMAGE }}:${VERSION}" \
+            --tag "${{ env.IMAGE }}:latest" \
+            "${{ env.IMAGE }}:amd64-${VERSION}" \
+            "${{ env.IMAGE }}:aarch64-${VERSION}"
+
+          digest="$(jq -r '.["containerimage.descriptor"].digest' "${metadata}")"
+          cosign sign --yes "${{ env.IMAGE }}@${digest}"

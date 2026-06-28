@@ -1,0 +1,166 @@
+---
+name: CI
+
+# yamllint disable-line rule:truthy
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  lint-addon:
+    name: Add-on lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: frenck/action-addon-linter@v2
+        with:
+          path: "./voiceprint"
+
+  lint-yaml:
+    name: yamllint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: frenck/action-yamllint@v1
+
+  lint-dockerfile:
+    name: hadolint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hadolint/hadolint-action@v3.3.0
+        with:
+          dockerfile: voiceprint/Dockerfile
+          failure-threshold: warning
+
+  lint-shell:
+    name: shellcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Collect shell scripts
+        id: collect
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < <(find voiceprint/rootfs \
+            -type f \( -name '*.sh' -o -name 'run' -o -name 'finish' \) \
+            2>/dev/null || true)
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          else
+            printf '%s\n' "${FILES[@]}" > /tmp/shellcheck-targets
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: shellcheck
+        if: steps.collect.outputs.found == 'true'
+        run: |
+          set -euo pipefail
+          mapfile -t FILES < /tmp/shellcheck-targets
+          docker run --rm -v "$PWD:/mnt" -w /mnt koalaman/shellcheck:stable \
+            --severity=warning --shell=bash "${FILES[@]}"
+
+  lint-unicode:
+    name: Unicode whitespace
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check for Unicode whitespace
+        run: |
+          set -euo pipefail
+          FOUND=$(find voiceprint -type f \( \
+            -name '*.yaml' -o -name '*.yml' -o \
+            -name '*.py'   -o -name '*.sh'  -o \
+            -name 'run'    -o -name 'finish' \
+          \) -print0 \
+            | xargs -0 --no-run-if-empty grep -Pln \
+              '[\x{a0}\x{2002}-\x{200b}\x{202f}\x{205f}\x{3000}]' \
+              2>/dev/null || true)
+          if [ -n "$FOUND" ]; then
+            echo "::error::Unicode whitespace found in:"
+            echo "$FOUND"
+            exit 1
+          fi
+          echo "OK — no Unicode whitespace"
+
+  lint-markdown:
+    name: markdownlint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DavidAnson/markdownlint-cli2-action@v23
+        with:
+          globs: |
+            README.md
+            voiceprint/DOCS.md
+            voiceprint/README.md
+
+  build-test:
+    name: build test (${{ matrix.arch }})
+    if: >-
+      !startsWith(github.head_ref, 'release-please--') &&
+      github.ref != 'refs/heads/main'
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            platform: linux/amd64
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/build-push-action@v7
+        with:
+          context: voiceprint
+          platforms: ${{ matrix.platform }}
+          push: false
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=min,scope=${{ matrix.arch }}
+
+  ci-ok:
+    name: CI passed
+    if: always()
+    needs:
+      - lint-addon
+      - lint-yaml
+      - lint-dockerfile
+      - lint-shell
+      - lint-unicode
+      - lint-markdown
+      - build-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify all jobs succeeded (or cleanly skipped)
+        run: |
+          set -euo pipefail
+          for result in \
+            "${{ needs.lint-addon.result }}" \
+            "${{ needs.lint-yaml.result }}" \
+            "${{ needs.lint-dockerfile.result }}" \
+            "${{ needs.lint-shell.result }}" \
+            "${{ needs.lint-unicode.result }}" \
+            "${{ needs.lint-markdown.result }}" \
+            "${{ needs.build-test.result }}"; do
+            case "$result" in
+              success|skipped) ;;
+              *) echo "job failed: $result"; exit 1 ;;
+            esac
+          done
