@@ -5,8 +5,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "git pull --ff-only 2>&1 || true",
-            "statusMessage": "Pulling latest voiceprint…",
+            "command": "git pull --ff-only 2>&1 || true; COUNT=$(gh pr list --assignee @me --json number --jq 'length' 2>/dev/null || echo 0); [ \"$COUNT\" -gt 0 ] && echo \"Open PRs assigned to you ($COUNT):\" && gh pr list --assignee @me 2>/dev/null; true",
+            "statusMessage": "Pulling latest voiceprint and checking PRs\u2026",
             "timeout": 60
           }
         ]
