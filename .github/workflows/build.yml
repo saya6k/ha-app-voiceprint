@@ -120,14 +120,9 @@ jobs:
         run: |
           set -euo pipefail
           SLUG="${GITHUB_REPOSITORY#saya6k/ha-app-}"
-          python3 -c "
-          import json, os, sys
-          print(json.dumps({
-            'event_type': 'app-released',
-            'client_payload': {
-              'app': os.environ['SLUG'],
-              'version': os.environ['VERSION'],
-              'release_notes': os.environ['RELEASE_NOTES'],
-            },
-          }))
-          " | gh api repos/saya6k/ha-apps/dispatches --input -
+          jq -n \
+            --arg app "$SLUG" \
+            --arg version "$VERSION" \
+            --arg notes "$RELEASE_NOTES" \
+            '{event_type:"app-released",client_payload:{app:$app,version:$version,release_notes:$notes}}' \
+          | gh api repos/saya6k/ha-apps/dispatches --input -
