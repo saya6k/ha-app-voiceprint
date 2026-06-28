@@ -1,4 +1,4 @@
-.agents/
+.agents/memory/
 
 # Python
 __pycache__/
@@ -10,3 +10,7 @@ __pycache__/
 
 # Claude Code
 .claude/
+# Claude Code local files (set up symlinks manually)
+CLAUDE.md
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
