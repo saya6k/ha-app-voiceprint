@@ -93,22 +93,20 @@ jobs:
         uses: sigstore/cosign-installer@v3
 
       - name: Create and sign multi-arch manifest
-        # Two floating tags, one per track -- :stable always moves to the
-        # newest stable release, :rc always moves to the newest published
-        # rc, so testers can `docker pull IMAGE:rc` without needing to know
-        # the exact -rc.N version. Neither ever clobbers the other; no plain
-        # :latest tag is pushed, so there's nothing that silently means
-        # "whichever track built most recently". ha-apps' config.yaml pins
-        # an exact version regardless, so it never touches either.
+        # :latest moves on every publish (stable or rc) -- it means "the
+        # newest thing available", same as Docker's usual convention, so
+        # anyone tracking it for testing never goes stale once a stable
+        # release supersedes the last rc. :stable moves only on non-rc
+        # publishes, for anyone who wants to guarantee they never land on an
+        # untested build. ha-apps' config.yaml pins an exact version
+        # regardless, so it never touches either floating tag.
         env:
           IS_PRERELEASE: ${{ github.event.release.prerelease }}
         run: |
           set -euo pipefail
           metadata="$(mktemp)"
-          tags=(--tag "${{ env.IMAGE }}:${VERSION}")
-          if [ "${IS_PRERELEASE}" = "true" ]; then
-            tags+=(--tag "${{ env.IMAGE }}:rc")
-          else
+          tags=(--tag "${{ env.IMAGE }}:${VERSION}" --tag "${{ env.IMAGE }}:latest")
+          if [ "${IS_PRERELEASE}" != "true" ]; then
             tags+=(--tag "${{ env.IMAGE }}:stable")
           fi
           docker buildx imagetools create \
