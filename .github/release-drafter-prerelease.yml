@@ -1,3 +1,4 @@
+---
 # Prerelease (rc) track: drafts vX.Y.Z-rc.N. With prerelease-identifier set,
 # only the rc suffix increments between published prereleases, so shipping
 # several rcs never consumes stable version numbers -- the stable track
