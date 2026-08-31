@@ -5,7 +5,7 @@ SAMPLE_RATE = 16000
 # CAM++ zh_en advanced (3D-Speaker, Apache 2.0), converted to a fixed-shape
 # TFLite graph: input (1, 80, 500) fbank, output (1, 192) embedding.
 # 500 frames = 5.0 s; shorter audio is repeat-padded, longer is cropped.
-# Regeneration recipe lives in .agents/runtime-experiment (gitignored).
+# Regenerate by exporting the upstream checkpoint at this fixed shape.
 NUM_FRAMES = 500
 NUM_MELS = 80
 EMBEDDING_DIM = 192
