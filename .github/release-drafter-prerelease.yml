@@ -11,12 +11,20 @@ tag-template: "v$RESOLVED_VERSION"
 prerelease: true
 prerelease-identifier: "rc"
 version-resolver:
+  # A `!` in a Conventional-Commit title (e.g. `feat!:`) gives the PR the
+  # `breaking` label instead of its type label. Below 1.0 a breaking change
+  # bumps the minor version like a feature; move it to `major` once this
+  # reaches 1.0.
   minor:
-    labels: ["enhancement", "feature"]
+    labels: ["breaking", "enhancement", "feature"]
   patch:
     labels: ["bug", "fix", "chore", "dependencies", "ci"]
   default: patch
 categories:
+  # A PR is listed under every category it matches, so a breaking PR carries
+  # only the `breaking` label (not its type label) to appear here alone.
+  - title: "⚠️ Breaking changes"
+    labels: ["breaking"]
   - title: "New Features"
     labels: ["enhancement", "feature"]
   - title: "Bug Fixes"
